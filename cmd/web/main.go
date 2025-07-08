@@ -39,7 +39,8 @@ func main() {
 
 	//Initialize a models.SnippetModel instance containing the connec
 	app := &application{
-		logger: logger,
+		logger:   logger,
+		snippets: &models.SnippetModel{DB: db},
 	}
 
 	logger.Info("Starting server", "addr", *addr)
