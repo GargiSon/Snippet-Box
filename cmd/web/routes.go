@@ -2,12 +2,10 @@ package main
 
 import "net/http"
 
-func (app *application) routes() *http.ServeMux {
+func (app *application) routes() http.Handler {
 	mux := http.NewServeMux()
 
-	// Create a file server which serves files out of the "./ui/static" directory.
 	fileServer := http.FileServer(http.Dir("./ui/static/"))
-	// Use the mux.Handle() function to register the file server as the handler for all URL paths that start with "/static/". For matching paths, we strip the "/static" prefix before the request reaches the file server.
 	mux.Handle("GET /static/", http.StripPrefix("/static", fileServer))
 
 	mux.HandleFunc("GET /{$}", app.home)
@@ -15,5 +13,8 @@ func (app *application) routes() *http.ServeMux {
 	mux.HandleFunc("GET /snippet/create", app.snippetCreate)
 	mux.HandleFunc("POST /snippet/create", app.snippetCreatePost)
 
-	return mux
+	// Pass the servemux as the 'next' parameter to the commonHeaders middleware.
+	// Because commonHeaders is just a function, and the function returns a
+	// http.Handler we don't need to do anything else.
+	return commonHeaders(mux)
 }

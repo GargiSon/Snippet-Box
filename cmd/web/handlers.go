@@ -6,9 +6,9 @@ import (
 	"net/http"
 	"snippetbox/internal/models"
 	"strconv"
+	"text/template"
 )
 
-// Change the signature of the handler so it is defined as a method against *application
 func (app *application) home(w http.ResponseWriter, r *http.Request) {
 	w.Header().Add("Server", "Go")
 
@@ -17,35 +17,39 @@ func (app *application) home(w http.ResponseWriter, r *http.Request) {
 		app.serverError(w, r, err)
 		return
 	}
-	for _, snippet := range snippets {
-		fmt.Fprintf(w, "%+v\n", snippet)
+
+	files := []string{
+		"./ui/html/base.tmpl",
+		"./ui/html/partials/nav.tmpl",
+		"./ui/html/pages/home.tmpl",
 	}
 
-	// files := []string{
-	// 	"./ui/html/base.tmpl",
-	// 	"./ui/html/partials/nav.tmpl",
-	// 	"./ui/html/pages/home.tmpl",
+	ts, err := template.ParseFiles(files...)
+	if err != nil {
+		app.serverError(w, r, err)
+		return
+	}
+
+	data := templateData{
+		Snippets: snippets,
+	}
+
+	err = ts.ExecuteTemplate(w, "base", data)
+	if err != nil {
+		app.serverError(w, r, err)
+	}
+	// for _, snippet := range snippets {
+	// 	fmt.Fprintf(w, "%+v\n", snippet)
 	// }
 
-	// ts, err := template.ParseFiles(files...)
-	// if err != nil {
-	// 	// Because the home handler is now a method against application struct it can access its fields, including the structured logger. We'll use this to create a log entry level containing the error message, also including the request method and URI as attributes to assisst with debugging.
-	// 	// app.logger.Error(err.Error(), "method", r.Method, "uri", r.URL.RequestURI())
-	// 	// http.Error(w, "Internal Server Error", http.StatusInternalServerError)
+	// Call the newTemplateData() helper to get a templateData struct containing
+	// the 'default' data (which for now is just the current year), and add the
+	// snippets slice to it.
+	data := app.newTemplateData(r)
+	data.Snippets = snippets
+	// Pass the data to the render() helper as normal.
+	app.render(w, r, http.StatusOK, "home.tmpl", data)
 
-	// 	//These 2 lines in one
-	// 	app.serverError(w, r, err)
-	// 	return
-	// }
-
-	// err = ts.ExecuteTemplate(w, "base", nil)
-	// if err != nil {
-	// 	// app.logger.Error(err.Error(), "method", r.Method, "uri", r.URL.RequestURI())
-	// 	// http.Error(w, "Internal Server Error", http.StatusInternalServerError)
-
-	// 	// These 2 lines in one
-	// 	app.serverError(w, r, err)
-	// }
 }
 
 func (app *application) snippetView(w http.ResponseWriter, r *http.Request) {
@@ -54,8 +58,6 @@ func (app *application) snippetView(w http.ResponseWriter, r *http.Request) {
 		http.NotFound(w, r)
 		return
 	}
-
-	//Use the SnippetModels GET() method to retrieve the data for a specific record based on its ID. If no matching record is found, return a 404 Not Found response.
 	snippet, err := app.snippets.Get(id)
 	if err != nil {
 		if errors.Is(err, models.ErrNoRecord) {
@@ -65,8 +67,36 @@ func (app *application) snippetView(w http.ResponseWriter, r *http.Request) {
 		}
 		return
 	}
-	// Write the snippet data as a plain-text HTTP response body.
-	fmt.Fprintf(w, "%+v", snippet)
+
+	// Initialize a slice containing the paths to the view.tmpl file, plus the base layout and navigation partial that we made earlier.
+	files := []string{
+		"./ui/html/base.tmpl",
+		"./ui/html/partials/nav.tmpl",
+		"./ui/html/pages/home.tmpl",
+	}
+
+	// Parse the template files...
+	ts, err := template.ParseFiles(files...)
+	if err != nil {
+		app.serverError(w, r, err)
+		return
+	}
+
+	// And do the same thing again here...
+	data := app.newTemplateData(r)
+	data.Snippet = snippet
+	app.render(w, r, http.StatusOK, "view.tmpl", data)
+
+	//Create an instance of a templateData struct holding the snippet data.
+	data := templateData{
+		Snippet: snippet,
+	}
+
+	// And then execute them. Notice how we are passing in the snippet data (a models.Snippet struct) as the final parameter?
+	err = ts.ExecuteTemplate(w, "base", data)
+	if err != nil {
+		app.serverError(w, r, err)
+	}
 }
 
 func (app *application) snippetCreate(w http.ResponseWriter, r *http.Request) {
@@ -74,12 +104,10 @@ func (app *application) snippetCreate(w http.ResponseWriter, r *http.Request) {
 }
 
 func (app *application) snippetCreatePost(w http.ResponseWriter, r *http.Request) {
-	//Create some variables holding dummy data, We'll remove the later on during the build
 	title := "0 snail"
 	content := "0 snail\n Climk Mount Fuji, \nBut slowly, slowly!\n\n- Kobayashi Issa"
 	expires := 7
 
-	//Pass the data to the snippetModel.Insert() method, receiving the ID of the new record back.
 	id, err := app.snippets.Insert(title, content, expires)
 	if err != nil {
 		app.serverError(w, r, err)
